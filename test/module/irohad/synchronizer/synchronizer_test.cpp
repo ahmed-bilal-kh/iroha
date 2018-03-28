@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#include <gmock/gmock.h>
+
 #include "backend/protobuf/block.hpp"
 #include "builders/protobuf/block.hpp"
 #include "framework/test_subscriber.hpp"
@@ -24,6 +26,7 @@
 #include "module/shared_model/builders/protobuf/test_block_builder.hpp"
 #include "synchronizer/impl/synchronizer_impl.hpp"
 #include "validation/chain_validator.hpp"
+#include "validators/answer.hpp"
 
 using namespace iroha;
 using namespace iroha::model;
@@ -36,6 +39,26 @@ using namespace framework::test_subscriber;
 using ::testing::DefaultValue;
 using ::testing::Return;
 using ::testing::_;
+
+class MockBlockValidator {
+ public:
+  MOCK_CONST_METHOD1(
+      validate,
+      shared_model::validation::Answer(const shared_model::interface::Block &));
+};
+
+template <typename T = MockBlockValidator>
+class TemplateMockBlockValidator {
+ public:
+  std::shared_ptr<T> validator;
+  TemplateMockBlockValidator() {
+    validator = std::make_shared<T>();
+  }
+  shared_model::validation::Answer validate(
+      const shared_model::interface::Block &block) const {
+    return validator->validate(block);
+  }
+};
 
 class SynchronizerTest : public ::testing::Test {
  public:
@@ -136,8 +159,20 @@ TEST_F(SynchronizerTest, ValidWhenBadStorage) {
 
 TEST_F(SynchronizerTest, ValidWhenBlockValidationFailure) {
   // commit from consensus => chain validation failed => commit successful
-  auto block = TestUnsignedBlockBuilder().height(5).build().signAndAddSignature(
-      shared_model::crypto::DefaultCryptoAlgorithmType::generateKeypair());
+  TemplateMockBlockValidator<MockBlockValidator> mockBlockValidator;
+  EXPECT_CALL(*mockBlockValidator.validator, validate(_))
+      .WillOnce(Return(shared_model::validation::Answer()));
+  using TestUnsignedBlockBuilder = shared_model::proto::TemplateBlockBuilder<
+      (1 << shared_model::proto::TemplateBlockBuilder<>::total) - 1,
+      TemplateMockBlockValidator<MockBlockValidator>,
+      shared_model::proto::UnsignedWrapper<shared_model::proto::Block>>;
+
+  auto block = TestUnsignedBlockBuilder(mockBlockValidator)
+                   .height(5)
+                   .build()
+                   .signAndAddSignature(
+                       shared_model::crypto::DefaultCryptoAlgorithmType::
+                           generateKeypair());
   std::shared_ptr<shared_model::interface::Block> test_block =
       std::make_shared<shared_model::proto::Block>(std::move(block));
 

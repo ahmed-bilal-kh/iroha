@@ -30,12 +30,4 @@ using TestBlockBuilder = shared_model::proto::TemplateBlockBuilder<
     shared_model::validation::DefaultBlockValidator,
     shared_model::proto::Block>;
 
-/**
- * Same but returns UnsignedWrapper<Block> instead of Block
- */
-using TestUnsignedBlockBuilder = shared_model::proto::TemplateBlockBuilder<
-    (1 << shared_model::proto::TemplateBlockBuilder<>::total) - 1,
-    shared_model::validation::BlockAlwaysValidValidator,
-    shared_model::proto::UnsignedWrapper<shared_model::proto::Block>>;
-
 #endif  // IROHA_TEST_BLOCK_BUILDER_HPP
